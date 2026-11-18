@@ -1,0 +1,1233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>자유투 연습 시뮬레이터</title>
+<style>
+:root{
+  --bg:#0c0f14; --panel:rgba(13,17,24,.86); --line:rgba(255,255,255,.12);
+  --fg:#eef2f7; --muted:#93a1b3; --accent:#ff8a3d; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+  font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;overflow:hidden}
+#c{display:block;width:100vw;height:100vh}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;backdrop-filter:blur(6px)}
+.hud{position:fixed;z-index:5;pointer-events:none}
+.muted{color:var(--muted)} .ok{color:var(--ok)} .bad{color:var(--bad)} .mid{color:var(--warn)}
+#stats{left:12px;top:12px;padding:12px 14px;min-width:220px;font-size:13px;line-height:1.7}
+#stats .pct{font-size:30px;font-weight:800;color:var(--accent);line-height:1.1}
+#dots{display:flex;gap:4px;margin-top:4px}
+#dots i{width:12px;height:12px;border-radius:50%;background:#374151;display:block}
+#dots i.m{background:var(--ok)} #dots i.x{background:var(--bad)}
+#analysis{right:12px;top:12px;padding:12px 14px;width:300px;font-size:13px;line-height:1.65;max-height:calc(100vh - 24px);overflow:auto}
+#analysis h3{margin:0 0 4px;font-size:14px}
+#analysis .sec{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+#analysis .row{display:flex;justify-content:space-between;gap:8px}
+#tip{margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(255,138,61,.12);color:#ffd2b5}
+#camBox{left:12px;bottom:12px;width:280px;padding:8px;font-size:12px}
+#camCanvas{width:100%;aspect-ratio:4/3;border-radius:8px;display:block;background:#000}
+#camState{margin-top:6px;line-height:1.5}
+#prompt{left:50%;bottom:18px;transform:translateX(-50%);padding:10px 18px;font-size:16px;font-weight:700;text-align:center;white-space:nowrap}
+#gauge{width:240px;height:10px;border-radius:5px;background:#1f2937;margin:6px auto 0;position:relative;overflow:hidden}
+#gauge b{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,#60a5fa,#34d399,#f87171)}
+#gauge s{position:absolute;left:50%;top:-2px;bottom:-2px;width:2px;background:#fff}
+#big{left:50%;top:22%;transform:translate(-50%,-50%) scale(.9);font-size:54px;font-weight:900;letter-spacing:1px;
+  text-shadow:0 4px 24px rgba(0,0,0,.6);opacity:0;transition:opacity .25s,transform .25s;text-align:center}
+#big small{display:block;font-size:20px;font-weight:700}
+#big.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#btns{position:fixed;left:50%;top:12px;transform:translateX(-50%);display:flex;gap:6px;z-index:6}
+button,select{font:inherit;cursor:pointer;border:1px solid var(--line);background:#1f2937;color:var(--fg);border-radius:8px;padding:7px 12px;font-size:13px}
+button:hover{background:#374151}
+button.primary{background:var(--accent);color:#2a1205;border:none;font-weight:800}
+button.primary:hover{filter:brightness(1.08)}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,8,12,.8);z-index:20;padding:16px}
+.card{max-width:760px;width:100%;padding:24px 26px;max-height:92vh;overflow:auto}
+.card h1{margin:0 0 6px;font-size:24px}
+.card p{color:var(--muted);margin:4px 0 14px;line-height:1.6}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:12px 0 16px}
+.step{border:1px solid var(--line);border-radius:10px;padding:10px;font-size:13px;line-height:1.5}
+.step .e{font-size:26px}
+.opts{display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 16px;align-items:center;font-size:14px}
+#loading{color:var(--warn);margin-top:10px;min-height:20px;font-size:14px}
+#calib{flex-direction:column;gap:8px;background:rgba(5,8,12,.94)}
+.calHead{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;justify-content:center;font-size:20px}
+.calHead span{font-size:14px}
+.calStage{position:relative;max-width:100%}
+#calCanvas{display:block;height:min(80vh,calc((100vw - 32px)*.75));aspect-ratio:4/3;max-width:100%;border-radius:12px;background:#000;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+#calChecks{position:absolute;left:12px;top:12px;padding:10px 12px;font-size:14px;line-height:1.75;min-width:190px}
+#calChecks .ck{display:flex;justify-content:space-between;gap:12px}
+#calib .ring{position:absolute;right:12px;top:12px;width:84px;height:84px;border-radius:50%;display:grid;place-items:center;font-size:20px;font-weight:800;
+  background:conic-gradient(var(--accent) calc(var(--p)*1%), #1f2937 0)}
+#calib .ring span{width:68px;height:68px;border-radius:50%;background:#111827;display:grid;place-items:center}
+#calMsg{font-size:19px;font-weight:800;color:var(--warn);text-align:center;min-height:28px}
+.flyCam{position:fixed;z-index:40;border-radius:10px;transition:all .85s cubic-bezier(.65,0,.25,1);box-shadow:0 10px 40px rgba(0,0,0,.6);pointer-events:none}
+#camBox.glow{box-shadow:0 0 0 3px var(--accent),0 0 30px rgba(255,138,61,.6);transition:box-shadow .4s}
+@media (max-width:820px){#calChecks{font-size:12px;min-width:150px;padding:6px 8px}}
+.hidden{display:none!important}
+@media (max-width:820px){
+  #analysis{width:220px;font-size:12px}
+  #camBox{width:180px}
+  #btns{top:auto;bottom:90px}
+  #prompt{white-space:normal;max-width:calc(100vw - 32px);font-size:14px}
+}
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="stats" class="hud panel">
+  <div class="muted">성공률</div>
+  <div class="pct" id="pct">0%</div>
+  <div><span id="made">0</span> / <span id="att">0</span> 성공 · 🔥 연속 <span id="streak">0</span> (최고 <span id="best">0</span>)</div>
+  <div id="dots"></div>
+</div>
+<div id="btns"><button id="btnReplay">🎬 다시보기 (V)</button><button id="btnCalib">🎯 다시 보정 (K)</button><button id="btnMenu">☰ 메뉴</button></div>
+
+<div id="analysis" class="hud panel">
+  <h3>📊 슛 분석</h3>
+  <div id="anaShot" class="muted">아직 슛 기록이 없어요.</div>
+  <div class="sec"><h3>🧍 자세 체크</h3><div id="anaPose" class="muted">슛을 하면 자세를 분석해요.</div></div>
+  <div id="tip" class="hidden"></div>
+</div>
+
+<div id="camBox" class="hud panel">
+  <canvas id="camCanvas" width="320" height="240"></canvas>
+  <div id="camState">웹캠 꺼짐 (키보드 모드)</div>
+</div>
+
+<div id="prompt" class="hud panel">-</div>
+<div id="big" class="hud"></div>
+
+<div id="menu" class="overlay">
+  <div class="card panel">
+    <h1>🏀 두 손 자유투 연습 시뮬레이터</h1>
+    <p>웹캠이 양손 관절과 상체 자세(어깨·팔꿈치·손목)를 인식해요. 실제처럼 두 손으로 공을 잡고, 이마 위로 들어 올렸다가 밀어 던지세요. 매 슛마다 발사각·힘·좌우 오차와 팔꿈치 정렬·팔로스루를 분석해 줘요.</p>
+    <div class="grid">
+      <div class="step"><div class="e">🙌</div><b>① 잡기</b><br>두 손바닥을 공 크기만큼 벌려 가슴 앞에</div>
+      <div class="step"><div class="e">⬆️</div><b>② 세트</b><br>공을 이마 위로 올리고 팔꿈치는 공 아래로</div>
+      <div class="step"><div class="e">🚀</div><b>③ 릴리스</b><br>위·앞으로 쭉 밀어 올리며 손을 놓기</div>
+      <div class="step"><div class="e">🦢</div><b>④ 팔로스루</b><br>손목을 꺾어 손가락이 아래를 향하게 유지</div>
+    </div>
+    <div class="opts">
+      <label>슛 손 <select id="optHand"><option value="R">오른손잡이</option><option value="L">왼손잡이</option></select></label>
+      <label>난이도 <select id="optDiff">
+        <option value="easy">쉬움 (힘만 반영)</option>
+        <option value="normal" selected>보통 (힘·각도·방향 일부 반영)</option>
+        <option value="real">실전 (동작 그대로 반영)</option></select></label>
+      <label>슛 인식 <select id="optSens">
+        <option value="high">민감 (살짝 던져도 인식)</option>
+        <option value="normal" selected>보통</option>
+        <option value="low">둔감 (확실히 던질 때만)</option></select></label>
+    </div>
+    <p style="font-size:13px">💡 카메라에서 1.5~2m 떨어져 <b>상체와 두 손이 모두 보이게</b> 서 주세요. 처음 두 번은 <b>워밍업 슛</b>으로 내 동작의 기준(힘·각도)을 잡고, 그다음부터는 기준과 얼마나 똑같이 던지는지(일관성)로 결과가 정해져요.</p>
+    <div class="opts">
+      <button class="primary" id="startCam">📷 웹캠으로 시작</button>
+      <button id="startKey">⌨️ 키보드로 시작</button>
+    </div>
+    <div id="loading"></div>
+  </div>
+</div>
+
+<div id="calib" class="overlay hidden">
+  <div class="calHead"><b>🎯 자세 보정</b><span class="muted">공을 잡은 자세로 몸·팔·손을 화면의 가이드에 맞추고 2초간 유지하세요</span></div>
+  <div class="calStage">
+    <canvas id="calCanvas" width="960" height="720"></canvas>
+    <div id="calChecks" class="panel"></div>
+    <div class="ring" id="calRing" style="--p:0"><span id="calTxt">0%</span></div>
+  </div>
+  <div id="calMsg">두 손을 보여 주세요</div>
+</div>
+
+<video id="video" playsinline muted style="display:none"></video>
+
+<script type="module">
+import * as THREE from 'three';
+
+const $ = id => document.getElementById(id);
+const DEG = Math.PI / 180;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const median = a => { const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+
+// ───────── 규격 (m) : 림 중심 = 원점 위 3.05m, 슈터는 +z 쪽에서 -z 방향으로 던짐 ─────────
+const G = 9.81;
+const RIM = { x: 0, y: 3.05, z: 0, R: 0.2286, t: 0.011 };
+const BALL_R = 0.121;
+const BOARD = { z: -0.38, x0: -0.915, x1: 0.915, y0: 2.9, y1: 3.97 };
+const FT_Z = 4.19;               // 자유투 라인 (백보드에서 4.57m)
+const IDEAL_ANG = 52;
+// 동작 오차를 공에 얼마나 반영할지 (손 추적 노이즈를 고려해 작게 설정)
+const SENS = { easy: { p: 0.12, a: 0, y: 0.25 }, normal: { p: 0.25, a: 0.2, y: 0.45 }, real: { p: 0.45, a: 0.4, y: 0.8 } };
+const AIM_BACK = 0.065;   // 실제 슈터처럼 림 중심보다 살짝 뒤를 겨냥
+
+// ───────── 렌더러 / 씬 ─────────
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1f29);
+scene.fog = new THREE.Fog(0x1a1f29, 18, 40);
+
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, 100);
+const CAM_POS = new THREE.Vector3(0, 1.65, 4.6), CAM_LOOK = new THREE.Vector3(0, 2.55, 0);
+camera.position.copy(CAM_POS); camera.lookAt(CAM_LOOK);
+addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
+
+scene.add(new THREE.HemisphereLight(0xfff4e0, 0x3a2a1a, 0.9));
+const key = new THREE.DirectionalLight(0xffffff, 1.8);
+key.position.set(3, 10, 6); key.castShadow = true; key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -6, right: 6, top: 8, bottom: -4, near: 1, far: 30 });
+scene.add(key);
+const spot = new THREE.SpotLight(0xffffff, 60, 20, 0.5, 0.6); spot.position.set(0, 9, 2); spot.target.position.set(0, 3, 0); scene.add(spot, spot.target);
+
+// 나무 바닥 텍스처
+function woodTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1024; const g = cv.getContext('2d');
+  const ph = 64;
+  for (let y = 0; y < 1024; y += ph) {
+    let x = -(Math.random() * 400);
+    while (x < 1024) {
+      const len = 300 + Math.random() * 400, l = 62 + Math.random() * 10;
+      g.fillStyle = `hsl(32,${45 + Math.random() * 10}%,${l}%)`; g.fillRect(x, y, len, ph);
+      for (let k = 0; k < 14; k++) { g.strokeStyle = `rgba(120,70,30,${Math.random() * .12})`; g.beginPath(); const yy = y + Math.random() * ph; g.moveTo(x, yy); g.bezierCurveTo(x + len * .3, yy + 4, x + len * .6, yy - 4, x + len, yy); g.stroke(); }
+      g.fillStyle = 'rgba(60,35,15,.5)'; g.fillRect(x, y, 2, ph); x += len;
+    }
+    g.fillStyle = 'rgba(60,35,15,.45)'; g.fillRect(0, y, 1024, 2);
+  }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(5, 5); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ map: woodTexture(), roughness: .45, metalness: .05 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+// 실내 벽
+const room = new THREE.Mesh(new THREE.BoxGeometry(30, 14, 30), new THREE.MeshStandardMaterial({ color: 0x232a36, side: THREE.BackSide, roughness: .95 }));
+room.position.y = 7; scene.add(room);
+for (let i = -3; i <= 3; i++) {  // 관중석 느낌의 벽 띠
+  const b = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.2), new THREE.MeshBasicMaterial({ color: i % 2 ? 0xff8a3d : 0x2b6cb0 }));
+  b.position.set(i * 4, 5.5, -14.9); scene.add(b);
+}
+
+// 코트 라인
+const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const flat = (w, d, x, z, mat = lineMat, y = 0.004) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; scene.add(m); return m; };
+const BASE_Z = BOARD.z - 1.2;
+const paint = flat(4.9, FT_Z - BASE_Z, 0, (FT_Z + BASE_Z) / 2, new THREE.MeshStandardMaterial({ color: 0xb4432b, roughness: .5 }), 0.002);
+flat(4.9, 0.05, 0, FT_Z); flat(0.05, FT_Z - BASE_Z, -2.45, (FT_Z + BASE_Z) / 2); flat(0.05, FT_Z - BASE_Z, 2.45, (FT_Z + BASE_Z) / 2);
+flat(15, 0.05, 0, BASE_Z);
+function arc(r, cx, cz, t0, t1) { const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.025, r + 0.025, 96, 1, t0, t1 - t0), lineMat); m.rotation.x = -Math.PI / 2; m.position.set(cx, 0.004, cz); scene.add(m); }
+arc(1.8, 0, FT_Z, Math.PI, 2 * Math.PI);
+arc(6.75, 0, 0, Math.PI + 0.22, 2 * Math.PI - 0.22);
+// 슈터 발 위치 표시
+flat(0.32, 0.12, 0.12, FT_Z + 0.18, new THREE.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: .6 }), 0.005);
+flat(0.32, 0.12, -0.18, FT_Z + 0.28, new THREE.MeshBasicMaterial({ color: 0xff8a3d, transparent: true, opacity: .6 }), 0.005);
+
+// 백보드
+const boardGroup = new THREE.Group(); scene.add(boardGroup);
+const glass = new THREE.Mesh(new THREE.BoxGeometry(BOARD.x1 - BOARD.x0, BOARD.y1 - BOARD.y0, 0.03),
+  new THREE.MeshStandardMaterial({ color: 0xcfe8ff, transparent: true, opacity: .22, roughness: .05, metalness: .1 }));
+glass.position.set(0, (BOARD.y0 + BOARD.y1) / 2, BOARD.z - 0.015); boardGroup.add(glass);
+const white = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: .4 });
+const frame = (w, h, x, y, z = BOARD.z + 0.001) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.012), white); m.position.set(x, y, z); boardGroup.add(m); };
+const bw = BOARD.x1 - BOARD.x0, bh = BOARD.y1 - BOARD.y0, bcy = (BOARD.y0 + BOARD.y1) / 2;
+frame(bw, 0.05, 0, BOARD.y1 - 0.025); frame(bw, 0.05, 0, BOARD.y0 + 0.025); frame(0.05, bh, BOARD.x0 + 0.025, bcy); frame(0.05, bh, BOARD.x1 - 0.025, bcy);
+frame(0.59, 0.04, 0, 3.05 + 0.45); frame(0.59, 0.04, 0, 3.05 + 0.02); frame(0.04, 0.45, -0.275, 3.05 + 0.235); frame(0.04, 0.45, 0.275, 3.05 + 0.235);
+// 지지대
+const steel = new THREE.MeshStandardMaterial({ color: 0x2d3748, roughness: .6, metalness: .5 });
+const pole = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.6, 0.25), steel); pole.position.set(0, 1.8, BASE_Z - 1.2); pole.castShadow = true; scene.add(pole);
+const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 1.6), steel); arm.position.set(0, 3.45, BASE_Z - 0.4); scene.add(arm);
+const pad = new THREE.Mesh(new THREE.BoxGeometry(0.6, 2.0, 0.6), new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: .9 })); pad.position.set(0, 1.0, BASE_Z - 1.2); scene.add(pad);
+// 림
+const rimMat = new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: .4, metalness: .4, emissive: 0x401000 });
+const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM.R, 0.011, 10, 64), rimMat); rim.rotation.x = Math.PI / 2; rim.position.set(RIM.x, RIM.y, RIM.z); rim.castShadow = true; scene.add(rim);
+const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.03, 0.16), rimMat); bracket.position.set(0, RIM.y - 0.01, BOARD.z + 0.08); scene.add(bracket);
+// 그물
+const net = new THREE.Group(); net.position.set(RIM.x, RIM.y, RIM.z); scene.add(net);
+{
+  const pts = [], N = 16, rows = [[RIM.R, 0], [0.19, -0.16], [0.165, -0.3], [0.15, -0.42]];
+  for (let r = 0; r < rows.length - 1; r++) for (let i = 0; i < N; i++) {
+    const a0 = i / N * Math.PI * 2, a1 = (i + 0.5) / N * Math.PI * 2, a2 = (i + 1) / N * Math.PI * 2;
+    const [r0, y0] = rows[r], [r1, y1] = rows[r + 1];
+    const off = r % 2 ? 0.5 / N * Math.PI * 2 : 0;
+    pts.push(Math.cos(a0 + off) * r0, y0, Math.sin(a0 + off) * r0, Math.cos(a1 + off) * r1, y1, Math.sin(a1 + off) * r1);
+    pts.push(Math.cos(a2 + off) * r0, y0, Math.sin(a2 + off) * r0, Math.cos(a1 + off) * r1, y1, Math.sin(a1 + off) * r1);
+  }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  net.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0xf5f5f5, transparent: true, opacity: .85 })));
+}
+
+// 농구공
+function ballTexture() {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512; const g = cv.getContext('2d');
+  g.fillStyle = '#d9622b'; g.fillRect(0, 0, 1024, 512);
+  for (let i = 0; i < 9000; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,200,160'},${Math.random() * .08})`; g.fillRect(Math.random() * 1024, Math.random() * 512, 2, 2); }
+  g.strokeStyle = '#1a0d06'; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(0, 256); g.lineTo(1024, 256); g.stroke();
+  for (const x of [256, 768]) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 512); g.stroke(); }
+  for (const s of [1, -1]) { g.beginPath(); for (let y = 0; y <= 512; y += 4) { const x = 512 + s * 200 * Math.sin(y / 512 * Math.PI); y ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke();
+    g.beginPath(); for (let y = 0; y <= 512; y += 4) { const x = (s > 0 ? 0 : 1024) + s * 200 * Math.sin(y / 512 * Math.PI) * -1 + (s > 0 ? 0 : 0); y ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const ballMesh = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 40, 28), new THREE.MeshStandardMaterial({ map: ballTexture(), roughness: .75 }));
+ballMesh.castShadow = true; scene.add(ballMesh);
+
+// ───────── 사람 손 + 팔 (손가락 마디별 관절) ─────────
+// 손 로컬 좌표: 원점=손목, +y=손가락 방향, +z=손바닥이 보는 방향, 엄지는 오른손 +x / 왼손 -x
+// 피부: 미세한 색 얼룩 텍스처 + 부드러운 광택(sheen)으로 플라스틱 느낌을 줄임
+function skinTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const g = cv.getContext('2d');
+  g.fillStyle = '#ececec'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 60; i++) { const r = 10 + Math.random() * 30; const grd = g.createRadialGradient(0, 0, 0, 0, 0, r); const c = Math.random() < .5 ? '255,215,205' : '215,200,195'; grd.addColorStop(0, `rgba(${c},.25)`); grd.addColorStop(1, `rgba(${c},0)`); g.save(); g.translate(Math.random() * 256, Math.random() * 256); g.fillStyle = grd; g.fillRect(-r, -r, r * 2, r * 2); g.restore(); }
+  const img = g.getImageData(0, 0, 256, 256); for (let i = 0; i < img.data.length; i += 4) { const n = (Math.random() - .5) * 14; img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n; } g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const skin = new THREE.MeshPhysicalMaterial({ color: 0xe1a585, map: skinTexture(), roughness: .58, sheen: .6, sheenRoughness: .5, sheenColor: new THREE.Color(0xffc4a8), clearcoat: .06, clearcoatRoughness: .7 });
+const nailMat = new THREE.MeshPhysicalMaterial({ color: 0xe8b4a2, roughness: .3, clearcoat: .7, clearcoatRoughness: .25 });
+const bandMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: .95 });
+// 손가락: 기준 위치, 마디 길이, 마디별 굵기(뿌리→끝), 벌림 각
+const FINGERS = [
+  { x: 0.026, y: 0.091, len: [0.040, 0.024, 0.019], r: [0.0097, 0.0088, 0.0080, 0.0071], splay: 0.11 },  // 검지
+  { x: 0.0085, y: 0.094, len: [0.044, 0.027, 0.020], r: [0.0101, 0.0092, 0.0083, 0.0073], splay: 0.02 }, // 중지
+  { x: -0.0095, y: 0.091, len: [0.041, 0.025, 0.019], r: [0.0095, 0.0086, 0.0078, 0.0069], splay: -0.07 }, // 약지
+  { x: -0.026, y: 0.084, len: [0.032, 0.019, 0.017], r: [0.0083, 0.0075, 0.0068, 0.0060], splay: -0.16 }, // 소지
+];
+// 끝이 둥글고 가늘어지는 마디 (회전체) — 캡슐보다 실제 손가락 모양에 가까움
+function phalanx(r0, r1, L, tip = false) {
+  const pts = [];
+  for (let i = 0; i <= 5; i++) { const a = -Math.PI / 2 + i / 5 * Math.PI / 2; pts.push(new THREE.Vector2(r0 * Math.cos(a) + 1e-4, r0 * Math.sin(a))); }
+  pts.push(new THREE.Vector2((r0 + r1) / 2 * 1.04, L * 0.5));
+  const tr = tip ? r1 * 1.15 : r1;
+  for (let i = 0; i <= 6; i++) { const a = i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(r1 * Math.cos(a) + 1e-4, L + tr * Math.sin(a))); }
+  const geo = new THREE.LatheGeometry(pts, 20); geo.scale(1, 1, 0.84);
+  const m = new THREE.Mesh(geo, skin); m.castShadow = true; return m;
+}
+function ellipsoid(sx, sy, sz, mat = skin) { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 18), mat); m.scale.set(sx, sy, sz); m.castShadow = true; return m; }
+function palmGeometry(s) {
+  const sh = new THREE.Shape(), X = v => v * s;
+  sh.moveTo(X(-0.026), 0); sh.lineTo(X(0.026), 0);
+  sh.quadraticCurveTo(X(0.036), 0.004, X(0.038), 0.03); sh.lineTo(X(0.039), 0.079);
+  sh.quadraticCurveTo(X(0.038), 0.092, X(0.026), 0.094); sh.lineTo(X(-0.026), 0.091);
+  sh.quadraticCurveTo(X(-0.037), 0.089, X(-0.037), 0.076); sh.lineTo(X(-0.034), 0.02);
+  sh.quadraticCurveTo(X(-0.032), 0.002, X(-0.026), 0);
+  const geo = new THREE.ExtrudeGeometry(sh, { depth: 0.011, bevelEnabled: true, bevelThickness: 0.0085, bevelSize: 0.0068, bevelSegments: 6, curveSegments: 12 });
+  geo.translate(0, 0, -0.0055); return geo;
+}
+function makeHand(isRight, band) {
+  const s = isRight ? 1 : -1, root = new THREE.Group();
+  const palm = new THREE.Mesh(palmGeometry(s), skin); palm.castShadow = true; root.add(palm);
+  const thenar = ellipsoid(0.02, 0.033, 0.015); thenar.position.set(0.021 * s, 0.03, 0.009); thenar.rotation.z = -0.3 * s; root.add(thenar);   // 엄지 두덩
+  const hypo = ellipsoid(0.014, 0.033, 0.01); hypo.position.set(-0.027 * s, 0.046, 0.007); root.add(hypo);                                     // 새끼 두덩
+  const pad = ellipsoid(0.034, 0.012, 0.008); pad.position.set(0, 0.083, 0.01); root.add(pad);                                                   // 손가락 뿌리 패드
+  for (const f of FINGERS) { const kn = ellipsoid(f.r[0] * 0.95, f.r[0] * 0.9, f.r[0] * 0.55); kn.position.set(f.x * s, f.y - 0.004, -0.0095); root.add(kn); } // 손등 마디뼈 (은은하게)
+  const wristGeo = new THREE.LatheGeometry([0.0262, 0.0268, 0.0275, 0.0285].map((r, i) => new THREE.Vector2(r, -0.045 + i * 0.016)), 20); wristGeo.scale(1, 1, 0.72);
+  const wrist = new THREE.Mesh(wristGeo, skin); root.add(wrist);
+  if (band) { const b = new THREE.Mesh(new THREE.CylinderGeometry(0.0305, 0.0305, 0.034, 20), bandMat); b.scale.z = 0.76; b.position.y = -0.06; root.add(b); }
+  const joints = FINGERS.map(f => {
+    const chain = []; let parent = root;
+    f.len.forEach((L, k) => {
+      const j = new THREE.Group(); j.rotation.order = 'ZYX';
+      j.position.set(k ? 0 : f.x * s, k ? f.len[k - 1] : f.y, 0); parent.add(j);
+      j.add(phalanx(f.r[k], f.r[k + 1], L, k === 2));
+      if (k === 2) { const n = ellipsoid(f.r[3] * 0.72, L * 0.42, f.r[3] * 0.2, nailMat); n.position.set(0, L * 0.64, -f.r[3] * 0.8); n.rotation.x = -0.1; j.add(n); }
+      chain.push(j); parent = j;
+    });
+    return chain;
+  });
+  const thumb = []; let tp = root;
+  [[0.036, 0.0135, 0.0115], [0.030, 0.0113, 0.0102], [0.025, 0.0101, 0.0088]].forEach(([L, r0, r1], k) => {
+    const j = new THREE.Group(); j.rotation.order = 'ZYX';
+    if (k === 0) j.position.set(0.028 * s, 0.016, 0.007); else j.position.y = [0.036, 0.030][k - 1];
+    tp.add(j); j.add(phalanx(r0, r1, L, k === 2));
+    if (k === 2) { const n = ellipsoid(r1 * 0.8, L * 0.45, r1 * 0.27, nailMat); n.position.set(0, L * 0.6, -r1 * 0.85); j.add(n); }
+    thumb.push(j); tp = j;
+  });
+  root.userData = { joints, thumb, s, curl: [0.2, 0.2, 0.2, 0.2, 0.2], spread: 0.5 };
+  return root;
+}
+// curls = [엄지, 검지, 중지, 약지, 소지, (손가락 벌림 0~1)]
+function setCurl(hand, curls, k = 0.35) {
+  const u = hand.userData, s = u.s;
+  for (let i = 0; i < 5; i++) u.curl[i] += (curls[i] - u.curl[i]) * k;
+  u.spread += ((curls[5] ?? 0.45) - u.spread) * k;
+  u.joints.forEach((ch, i) => {
+    const c = u.curl[i + 1];
+    ch[0].rotation.set(0.06 + c * 1.3, 0, -s * FINGERS[i].splay * (0.4 + u.spread * 1.7));
+    ch[1].rotation.x = 0.1 + c * 1.6; ch[2].rotation.x = 0.06 + c * 1.1;
+  });
+  const c = u.curl[0];
+  u.thumb[0].rotation.set(0.35 + c * 0.25, 0.4 * s, -s * (0.32 + u.spread * 0.3));
+  u.thumb[1].rotation.x = 0.12 + c * 0.7; u.thumb[2].rotation.x = 0.1 + c * 0.9;
+}
+// 팔: 근육 굵기 변화가 있는 회전체 (r0=몸쪽, r1=끝쪽)
+function makeLimb(r0, r1) {
+  const prof = [[r0 * .9, 0], [r0, .07], [r0 * 1.07, .28], [r0 * .95, .55], [r1 * 1.08, .82], [r1, 1]];
+  const g = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 22); g.scale(1, 1, .84);
+  const m = new THREE.Mesh(g, skin); m.castShadow = true; scene.add(m); return m;
+}
+// 손을 밝혀 주는 보조광 (카메라 방향에서)
+const fill = new THREE.DirectionalLight(0xfff1e8, 0.75); fill.position.set(0.5, 2.4, 7); fill.target.position.set(0, 1.6, 3.8); scene.add(fill, fill.target);
+const _up = new THREE.Vector3(0, 1, 0);
+function placeLimb(m, a, b) { const d = b.clone().sub(a), L = d.length(); m.position.copy(a); m.quaternion.setFromUnitVectors(_up, d.divideScalar(L || 1)); m.scale.set(1, L, 1); }
+let arms = null;   // { shoot:{hand,fore,upper,elbowBall}, guide:{...} }
+function buildHands() {
+  if (arms) for (const a of [arms.shoot, arms.guide]) [a.hand, a.fore, a.upper, a.elbow].forEach(o => scene.remove(o));
+  const mk = (isRight, band) => {
+    const hand = makeHand(isRight, band); scene.add(hand);
+    const elbow = ellipsoid(0.045, 0.045, 0.045); scene.add(elbow);
+    elbow.scale.setScalar(0.85);
+    return { hand, fore: makeLimb(0.037, 0.027), upper: makeLimb(0.046, 0.039), elbow, init: false };
+  };
+  arms = { shoot: mk(rightHanded, true), guide: mk(!rightHanded, false) };
+}
+const _m4 = new THREE.Matrix4();
+function orient(f, n) {
+  const y = f.clone().normalize(); let z = n.clone().normalize();
+  const x = new THREE.Vector3().crossVectors(y, z).normalize(); z = new THREE.Vector3().crossVectors(x, y);
+  return new THREE.Quaternion().setFromRotationMatrix(_m4.makeBasis(x, y, z));
+}
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+function poseArm(a, visible, wrist, f, n, curls, side, k) {
+  for (const o of [a.hand, a.fore, a.upper, a.elbow]) o.visible = visible;
+  if (!visible) { a.init = false; return; }
+  const q = orient(f, n);
+  if (!a.init) { a.hand.position.copy(wrist); a.hand.quaternion.copy(q); a.init = true; }
+  a.hand.position.lerp(wrist, k); a.hand.quaternion.slerp(q, k);
+  setCurl(a.hand, curls);
+  // 팔: 손목 → 팔꿈치 → 어깨 (화면 아래 모서리 쪽으로 이어짐)
+  const w = a.hand.position.clone().add(V3(0, -0.03, 0).applyQuaternion(a.hand.quaternion));
+  // 어깨는 눈(카메라)보다 아래·옆·약간 뒤 → 위팔은 화면 가장자리 밖으로 자연스럽게 빠짐
+  const shoulder = shoulderPos(side);
+  const elbow = solveElbow(w, shoulder, V3(side * 0.7, -1, 0.25));
+  a.elbow.position.copy(elbow);
+  placeLimb(a.fore, elbow, w); placeLimb(a.upper, shoulder, elbow);
+}
+const shoulderPos = side => V3(side * 0.21, CAM_POS.y - 0.27, CAM_POS.z - 0.2);
+// 팔을 쭉 뻗은 팔로스루 손목 위치 (어깨에서 팔 길이만큼 위·앞)
+const reachTarget = side => shoulderPos(side).addScaledVector(V3(-side * 0.12, 0.86, -0.5).normalize(), 0.56);
+// 2관절 IK: 아래팔 0.27m, 위팔 0.31m 길이를 지키며 팔꿈치 위치 계산 (pole = 팔꿈치가 향할 방향)
+function solveElbow(W, S, pole) {
+  const L1 = 0.27, L2 = 0.31, d0 = S.clone().sub(W), d = d0.length(), dir = d0.divideScalar(d || 1);
+  if (d >= L1 + L2 - 1e-3) return W.clone().addScaledVector(dir, L1 * d / (L1 + L2));
+  const a = (L1 * L1 - L2 * L2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+  const p = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
+  return W.clone().addScaledVector(dir, a).addScaledVector(p, h);
+}
+
+// 궤적: 실제(주황) + 이상적(점선)
+const TRAIL_MAX = 900;
+const trailGeo = new THREE.BufferGeometry(); trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_MAX * 3), 3)); trailGeo.setDrawRange(0, 0);
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0xffa04d, transparent: true, opacity: .9 })); trail.frustumCulled = false; scene.add(trail);
+let ghost = null;
+function drawGhost(from) {
+  if (ghost) { scene.remove(ghost); ghost.geometry.dispose(); }
+  const v = launchVelocity(from, centerFactor(from), IDEAL_ANG, 0), p = from.clone(), pts = [];
+  for (let i = 0; i < 400; i++) { pts.push(p.clone()); v.y -= G / 120; p.addScaledVector(v, 1 / 120); if (p.y < RIM.y - 0.3 && v.y < 0) break; }
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  ghost = new THREE.Line(geo, new THREE.LineDashedMaterial({ color: 0x7dd3fc, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: .7 }));
+  ghost.computeLineDistances(); ghost.frustumCulled = false; scene.add(ghost);
+}
+
+// ───────── 공 물리 ─────────
+const HOLD_POS = new THREE.Vector3(0.05, 1.56, 3.85);
+const KEY_POS = new THREE.Vector3(0.2, 1.6, 3.85);
+const ball = { p: HOLD_POS.clone(), v: new THREE.Vector3(), spin: 0, state: 'ready', t: 0,
+  touchedRim: false, touchedBoard: false, scored: false, cross: null, bounces: 0, frames: [], info: null };
+
+function idealSpeed(from, angDeg) {
+  const dx = Math.hypot(RIM.x - from.x, RIM.z - AIM_BACK - from.z), dh = RIM.y - from.y, th = angDeg * DEG;
+  const den = 2 * Math.cos(th) ** 2 * (dx * Math.tan(th) - dh);
+  return den > 0 ? Math.sqrt(G * dx * dx / den) : 9;
+}
+function launchVelocity(from, powerFactor, angDeg, yawDeg) {
+  const speed = idealSpeed(from, IDEAL_ANG) * powerFactor;
+  let hx = RIM.x - from.x, hz = RIM.z - AIM_BACK - from.z; const hl = Math.hypot(hx, hz); hx /= hl; hz /= hl;
+  const rx = -hz, rz = hx, yw = yawDeg * DEG;
+  const dx = hx * Math.cos(yw) + rx * Math.sin(yw), dz = hz * Math.cos(yw) + rz * Math.sin(yw);
+  const th = angDeg * DEG;
+  return new THREE.Vector3(dx * Math.cos(th) * speed, Math.sin(th) * speed, dz * Math.cos(th) * speed);
+}
+
+// 릴리스 위치마다 '득점되는 힘의 범위' 중앙을 미리 시뮬레이션으로 찾아 둠 → 이상적인 동작이면 항상 들어가게
+const centerCache = new Map();
+function simulateScores(from, f) {
+  const st = { p: from.clone(), v: launchVelocity(from, f, IDEAL_ANG, 0), touchedRim: false, touchedBoard: false, scored: false, cross: null, firstRim: null, bounces: 0 };
+  for (let i = 0; i < 3000; i++) { substep(st, 1 / 600, false); if (st.scored) return st.touchedRim || st.touchedBoard ? 1 : 2; if (st.v.y < 0 && st.p.y < RIM.y - 0.4) return 0; }
+  return 0;
+}
+function longestRun(fs, ok) {
+  let best = null, run = null;
+  for (const [f, r] of fs) { if (ok(r)) { run = run ? [run[0], f] : [f, f]; if (!best || run[1] - run[0] > best[1] - best[0]) best = run.slice(); } else run = null; }
+  return best;
+}
+function centerFactor(from) {
+  const key = [from.x, from.y, from.z].map(v => Math.round(v * 25)).join(',');
+  if (centerCache.has(key)) return centerCache.get(key);
+  const fs = [];
+  for (let f = 0.94; f <= 1.08; f += 0.0025) fs.push([f, simulateScores(from, f)]);
+  const best = longestRun(fs, r => r === 2) || longestRun(fs, r => r > 0);
+  const c = best ? (best[0] + best[1]) / 2 : 1; centerCache.set(key, c); return c;
+}
+
+function fire(powerFactor, angDeg, yawDeg, info = {}) {
+  if (ball.state !== 'ready' && ball.state !== 'held') return;
+  const from = ball.p.clone();
+  ball.v.copy(launchVelocity(from, powerFactor * centerFactor(from), angDeg, yawDeg));
+  Object.assign(ball, { state: 'flight', t: 0, firstRim: null, touchedRim: false, touchedBoard: false, scored: false, cross: null, bounces: 0, frames: [], spin: 14 });
+  ball.info = { powerFactor, angDeg, yawDeg, from, ...info };
+  trailGeo.setDrawRange(0, 0); trailN = 0;
+  drawGhost(from);
+  sfx.release();
+}
+let trailN = 0;
+
+let rimSoundCd = 0;
+function physics(dt) {
+  if (ball.state !== 'flight') return;
+  const SUB = 10, h = dt / SUB;
+  for (let s = 0; s < SUB; s++) substep(ball, h, true);
+  rimSoundCd -= dt;
+  ball.t += dt;
+  ball.frames.push(ball.p.clone());
+  if (trailN < TRAIL_MAX && ball.bounces === 0) { trailGeo.attributes.position.setXYZ(trailN++, ball.p.x, ball.p.y, ball.p.z); trailGeo.attributes.position.needsUpdate = true; trailGeo.setDrawRange(0, trailN); }
+  if (ball.scored && !ball.resultShown) showResult();
+  if (!ball.resultShown && (ball.bounces >= 1 || ball.t > 4)) showResult();
+  if (ball.t > 2.6 && (ball.bounces >= 2 || ball.t > 5)) endShot();
+}
+
+// 한 번의 미세 시간 단계 (live=true면 소리·그물 효과 발생)
+function substep(ball, h, live) {
+  {
+    const prevY = ball.p.y;
+    ball.v.y -= G * h;
+    ball.p.addScaledVector(ball.v, h);
+    // 림 (토러스와의 최근접점)
+    const dx = ball.p.x - RIM.x, dz = ball.p.z - RIM.z, hd = Math.hypot(dx, dz) || 1e-6;
+    const qx = RIM.x + dx / hd * RIM.R, qz = RIM.z + dz / hd * RIM.R, qy = RIM.y;
+    let nx = ball.p.x - qx, ny = ball.p.y - qy, nz = ball.p.z - qz; const d = Math.hypot(nx, ny, nz);
+    if (d < BALL_R + RIM.t) {
+      nx /= d; ny /= d; nz /= d;
+      ball.p.set(qx + nx * (BALL_R + RIM.t), qy + ny * (BALL_R + RIM.t), qz + nz * (BALL_R + RIM.t));
+      const vn = ball.v.x * nx + ball.v.y * ny + ball.v.z * nz;
+      if (vn < 0) {
+        ball.v.x -= 1.45 * vn * nx; ball.v.y -= 1.45 * vn * ny; ball.v.z -= 1.45 * vn * nz;   // 반발계수 0.45 (부드러운 림)
+        ball.v.multiplyScalar(0.86);
+        if (!ball.touchedRim) ball.firstRim = { x: qx - RIM.x, z: qz - RIM.z };
+        ball.touchedRim = true;
+        if (live && rimSoundCd <= 0 && -vn > 0.4) { sfx.rim(Math.min(1, -vn / 4)); rimSoundCd = 0.08; }
+      }
+    }
+    // 백보드
+    if (ball.v.z < 0 && ball.p.z - BALL_R < BOARD.z && ball.p.z > BOARD.z - 0.12 &&
+        ball.p.x > BOARD.x0 - 0.05 && ball.p.x < BOARD.x1 + 0.05 && ball.p.y > BOARD.y0 - 0.05 && ball.p.y < BOARD.y1 + 0.05) {
+      ball.p.z = BOARD.z + BALL_R; ball.v.z *= -0.6; ball.v.x *= 0.9; ball.v.y *= 0.9;
+      if (live && !ball.touchedBoard) sfx.board(); ball.touchedBoard = true;
+    }
+    // 림 평면 통과 판정
+    if (prevY >= RIM.y && ball.p.y < RIM.y && ball.v.y < 0) {
+      const ox = ball.p.x - RIM.x, oz = ball.p.z - RIM.z, r = Math.hypot(ox, oz);
+      if (!ball.cross && !ball.touchedRim && !ball.touchedBoard) ball.cross = { x: ox, z: oz, r };
+      if (r < RIM.R && !ball.scored) {
+        ball.scored = true; ball.v.x *= 0.45; ball.v.z *= 0.45; ball.v.y *= 0.8;
+        if (live) { netWiggle = 1; ball.touchedRim || ball.touchedBoard ? sfx.net(0.6) : sfx.swish(); }
+      }
+    }
+    // 바닥
+    if (ball.p.y < BALL_R) {
+      ball.p.y = BALL_R;
+      if (ball.v.y < -0.4) { ball.bounces++; if (live) sfx.bounce(Math.min(1, -ball.v.y / 6)); }
+      ball.v.y = -ball.v.y * 0.72; ball.v.x *= 0.85; ball.v.z *= 0.85;
+      if (Math.abs(ball.v.y) < 0.3) ball.v.y = 0;
+    }
+  }
+}
+
+// ───────── 결과 / 기록 ─────────
+const stats = { att: 0, made: 0, streak: 0, best: 0, recent: [] };
+function classifyMiss() {
+  const c = ball.cross;
+  if (!c && !ball.touchedRim && !ball.touchedBoard) return { label: '에어볼 · 너무 짧아요', short: '짧음', fix: '힘이 부족해요. 무릎과 팔을 같이 써서 더 높이 밀어 올리세요.' };
+  const ref = ball.firstRim ? { x: ball.firstRim.x, z: ball.firstRim.z } : c || { x: 0, z: 0 };
+  const parts = [];
+  if (ref.z > 0.08) parts.push('짧음'); else if (ref.z < -0.08) parts.push('김');
+  if (ref.x < -0.08) parts.push('왼쪽'); else if (ref.x > 0.08) parts.push('오른쪽');
+  if (!parts.length) parts.push(ball.touchedRim ? '림에 맞고 튕김' : '아깝게 빗나감');
+  const fixes = { 짧음: '조금 짧았어요. 같은 동작으로 손목 스냅을 조금 더 주세요.', 김: '길었어요. 힘을 살짝 빼고 아치를 더 높게 그려 보세요.',
+    왼쪽: '왼쪽으로 빗나갔어요. 슛 손이 림 중앙을 향해 똑바로 뻗는지 확인하세요.', 오른쪽: '오른쪽으로 빗나갔어요. 보조 손이 공을 밀지 않는지 확인하세요.' };
+  return { label: parts.join(' · '), short: parts[0], fix: fixes[parts[0]] || '좋은 시도예요! 같은 리듬으로 반복하세요.' };
+}
+function showResult() {
+  ball.resultShown = true;
+  const made = ball.scored;
+  stats.att++; if (made) { stats.made++; stats.streak++; stats.best = Math.max(stats.best, stats.streak); } else stats.streak = 0;
+  stats.recent.push(made); if (stats.recent.length > 10) stats.recent.shift();
+  let big, sub, cls;
+  if (made) {
+    const clean = !ball.touchedRim && !ball.touchedBoard;
+    big = clean ? 'SWISH! 🔥' : ball.touchedBoard ? '뱅크샷 골!' : '골! 🏀'; sub = clean ? '림에 닿지 않은 완벽한 슛' : '림을 맞고 들어갔어요'; cls = 'ok';
+    ball.missInfo = null;
+  } else { const m = classifyMiss(); big = '아깝다!'; sub = m.label; cls = 'bad'; ball.missInfo = m; }
+  if (made && stats.streak >= 3) sub += ` · ${stats.streak}연속!`;
+  bigText(big, sub, cls);
+  updateStats(); updateAnalysis();
+}
+function endShot() {
+  if (ball.state !== 'flight') return;
+  ball.state = 'done'; ball.resultShown = false;
+  setTimeout(() => { ball.state = 'ready'; ball.resultShown = false; ball.p.copy(camOn ? HOLD_POS : KEY_POS); ball.v.set(0, 0, 0); }, 700);
+}
+function updateStats() {
+  $('pct').textContent = stats.att ? Math.round(stats.made / stats.att * 100) + '%' : '0%';
+  $('made').textContent = stats.made; $('att').textContent = stats.att; $('streak').textContent = stats.streak; $('best').textContent = stats.best;
+  $('dots').innerHTML = stats.recent.map(m => `<i class="${m ? 'm' : 'x'}"></i>`).join('');
+}
+let bigT = null;
+function bigText(t, sub, cls) { const b = $('big'); b.innerHTML = `<span class="${cls}">${t}</span><small>${sub}</small>`; b.classList.add('show'); clearTimeout(bigT); bigT = setTimeout(() => b.classList.remove('show'), 2200); }
+
+function fmt(v, d = 0) { return (v >= 0 ? '+' : '') + v.toFixed(d); }
+function updateAnalysis() {
+  const i = ball.info; if (!i) return;
+  const apex = ball.frames.reduce((m, p) => Math.max(m, p.y), 0);
+  const rows = [];
+  rows.push(['결과', ball.scored ? '<span class="ok">성공</span>' : `<span class="bad">실패 · ${ball.missInfo.label}</span>`]);
+  if (i.warm) rows.push(['', '<span class="mid">워밍업 슛 (기준 측정 중)</span>']);
+  rows.push(['발사 각도', `${i.angDeg.toFixed(1)}° <span class="muted">(이상 ${IDEAL_ANG}°)</span>`]);
+  rows.push(['힘', `${(i.powerFactor * 100).toFixed(0)}% <span class="muted">(기준 100%)</span>`]);
+  rows.push(['좌우 방향', `${fmt(i.yawDeg, 1)}° ${Math.abs(i.yawDeg) < 1 ? '<span class="ok">정확</span>' : i.yawDeg > 0 ? '→ 오른쪽' : '← 왼쪽'}`]);
+  rows.push(['최고 높이', `${apex.toFixed(2)} m <span class="muted">(림 3.05m)</span>`]);
+  if (i.ratio !== undefined && !i.warm) rows.push(['동작 일관성', `${Math.abs(i.ratio - 1) < 0.07 ? '<span class="ok">좋음</span>' : '<span class="mid">흔들림</span>'} <span class="muted">(기준 대비 ${fmt((i.ratio - 1) * 100)}%)</span>`]);
+  $('anaShot').innerHTML = rows.map(([a, b]) => `<div class="row"><span class="muted">${a}</span><span>${b}</span></div>`).join('');
+  const tip = $('tip');
+  const poseTip = renderPoseChecks();
+  const t = poseTip || (ball.missInfo ? ball.missInfo.fix : '좋아요! 지금 리듬과 자세를 그대로 반복하세요.');
+  tip.textContent = '🏀 코칭: ' + t; tip.classList.remove('hidden');
+}
+
+// ───────── 소리 ─────────
+let actx = null;
+const env = (node, vol, dur) => { const g = actx.createGain(); g.gain.setValueAtTime(vol, actx.currentTime); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + dur); node.connect(g).connect(actx.destination); return g; };
+function noise(dur) { const b = actx.createBuffer(1, actx.sampleRate * dur, actx.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const s = actx.createBufferSource(); s.buffer = b; return s; }
+function tone(f, type, vol, dur, f2) { const o = actx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, actx.currentTime); if (f2) o.frequency.exponentialRampToValueAtTime(f2, actx.currentTime + dur); env(o, vol, dur); o.start(); o.stop(actx.currentTime + dur + .05); }
+const sfx = {
+  swish() { if (!actx) return; const n = noise(.45), f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 3500; f.Q.value = .7; n.connect(f); env(f, .5, .45); n.start(); [660, 880, 1320].forEach((fq, k) => setTimeout(() => tone(fq, 'sine', .08, .2), 120 + k * 90)); },
+  net(v) { if (!actx) return; const n = noise(.3), f = actx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2500; n.connect(f); env(f, .35 * v, .3); n.start(); },
+  rim(v) { if (!actx) return; tone(520, 'square', .07 * v + .02, .25); tone(1290, 'triangle', .05 * v + .02, .35); },
+  board() { if (!actx) return; tone(150, 'triangle', .3, .18, 80); },
+  bounce(v) { if (!actx) return; tone(110, 'sine', .35 * v, .15, 60); },
+  release() { if (!actx) return; tone(300, 'sine', .04, .08, 500); },
+};
+
+// ───────── 웹캠 + MediaPipe (손 + 포즈) ─────────
+let handLM = null, poseLM = null, camOn = false, lastVT = -1, vFrame = 0, handRes = null, poseRes = null, lastDetT = 0;
+const video = $('video');
+const cctx = $('camCanvas').getContext('2d');
+let rightHanded = true, difficulty = 'normal';
+
+async function initVision() {
+  const ld = $('loading');
+  ld.textContent = '손·자세 인식 모델을 불러오는 중… (처음엔 10~20초 걸릴 수 있어요)';
+  const V = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+  const { FilesetResolver, HandLandmarker, PoseLandmarker } = await import(V + '/vision_bundle.mjs');
+  const fs = await FilesetResolver.forVisionTasks(V + '/wasm');
+  const make = async (Cls, url, extra) => {
+    const o = d => ({ baseOptions: { modelAssetPath: url, delegate: d }, runningMode: 'VIDEO', ...extra });
+    try { return await Cls.createFromOptions(fs, o('GPU')); } catch { return await Cls.createFromOptions(fs, o('CPU')); }
+  };
+  handLM = await make(HandLandmarker, 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', { numHands: 2, minHandDetectionConfidence: .5, minTrackingConfidence: .5 });
+  ld.textContent = '자세 인식 모델을 불러오는 중…';
+  try { poseLM = await make(PoseLandmarker, 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', { numPoses: 1 }); }
+  catch (e) { console.warn('pose 모델 실패', e); poseLM = null; }
+  ld.textContent = '웹캠 권한을 허용해 주세요…';
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+  video.srcObject = stream; await video.play();
+  camOn = true;
+}
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const avgPts = (pts, idx) => idx.reduce((s, i) => ({ x: s.x + pts[i].x / idx.length, y: s.y + pts[i].y / idx.length }), { x: 0, y: 0 });
+
+// 손 상태 머신
+const H = { state: 'idle', hands: [], hist: [], samples: [], peak: 0, shotStart: 0, calib: null, calibP: 0, calibAcc: null, calibrating: false,
+  lostT: 0, notHoldT: 0, vel: { vy: 0, vx: 0, vz: 0, vs: 0, vg: 0 }, holding: false, setPose: null, relPose: null, follow: null, powers: [], angles: [] };
+
+function startCalibration() {
+  if (!camOn) return;
+  H.calibrating = true; H.calibP = 0; H.calibAcc = null; CT.sh = null; CT.noPoseT = 0; H.calT = null; $('calib').classList.remove('hidden');
+}
+
+function handTo3D(c, scR) {
+  const k = H.calib; const dx = (c.x - k.cx0) / k.scale0, dy = (k.baseY - c.y) / k.scale0;
+  return new THREE.Vector3(clamp(dx * 0.075 + (rightHanded ? 0.12 : -0.12), -0.6, 0.6), clamp(HOLD_POS.y + dy * 0.075, 0.8, 2.45), clamp(HOLD_POS.z - (scR - 1) * 0.5, 3.6, 4.25));
+}
+
+// 슛 인식 민감도: start = 슛 동작 시작 속도, peak = 슛으로 인정할 최고 속도 (손바닥 길이/초)
+const SHOT_TH = { low: { start: 6, peak: 9 }, normal: { start: 4.5, peak: 6.5 }, high: { start: 3, peak: 4.5 } };
+let shotSens = 'normal';
+const SET_LINE = 2.0;   // 보정 높이보다 손바닥 2개 이상 위 = 세트 자세
+
+// 보정 가이드 (거울 화면 기준 0~1 좌표)
+const GUIDE = { head: { u: .5, v: .2, r: .075 }, shY: .4, shHalf: .16, ball: { u: .5, v: .66, r: .1 }, hands: [{ u: .35, v: .66 }, { u: .65, v: .66 }], tol: .1 };
+
+function velocity() {
+  const h = H.hist; if (h.length < 2) return H.vel;
+  const n = h[h.length - 1]; let o = h[0];
+  for (let i = h.length - 2; i >= 0; i--) { if (n.t - h[i].t >= 0.09) { o = h[i]; break; } }
+  const dt = n.t - o.t; if (dt < 0.025) return H.vel;
+  const s0 = H.calib.scale0;
+  return { vy: -(n.cy - o.cy) / dt / s0, vx: (n.cx - o.cx) / dt / s0, vz: (n.sc - o.sc) / dt * 17, vs: (n.sx - o.sx) / dt / s0, vg: (n.gx - o.gx) / dt / s0 };
+}
+
+function onVision(t, dt) {
+  const ar = (video.videoWidth || 4) / (video.videoHeight || 3);
+  const hands = (handRes?.landmarks || []).map(lm => {
+    const pts = lm.map(p => ({ x: (1 - p.x) * ar, y: p.y }));
+    return { pts, c: avgPts(pts, [0, 5, 9, 13, 17]), sc: dist(pts[0], pts[9]) };
+  }).sort((a, b) => a.c.x - b.c.x);
+  H.hands = hands;
+
+  // ── 보정 ──
+  if (H.calibrating) { calibrateStep(hands, dt); return; }
+  if (!H.calib) return;
+
+  // ── 손 → 공 위치 ──
+  const two = hands.length >= 2;
+  let center = null, scR = 1, relDist = 99, shoot = null, guide = null;
+  if (two) {
+    const L = hands[0], R = hands[hands.length - 1], sc = (L.sc + R.sc) / 2;
+    center = { x: (L.c.x + R.c.x) / 2, y: (L.c.y + R.c.y) / 2 }; scR = sc / H.calib.scale0;
+    relDist = (dist(L.c, R.c) / sc) / H.calib.rel0;
+    shoot = rightHanded ? R : L; guide = rightHanded ? L : R;
+  } else if (hands.length === 1) { center = hands[0].c; scR = hands[0].sc / H.calib.scale0; shoot = hands[0]; }
+  H.holding = two && relDist > 0.45 && relDist < 1.8;
+  H.relDist = relDist;
+  // 손 개수가 바뀌면 기준점이 튀므로 속도 기록을 새로 시작
+  if (hands.length !== H.lastCount) { H.hist = []; H.lastCount = hands.length; }
+  if (center) { H.hist.push({ t, cx: center.x, cy: center.y, sc: scR, sx: shoot.c.x, gx: guide ? guide.c.x : shoot.c.x }); H.lostT = 0; }
+  else H.lostT += dt;
+  while (H.hist.length && H.hist[0].t < t - 0.5) H.hist.shift();
+  const v = H.vel = center ? velocity() : H.vel;
+  if (center) H.target = handTo3D(center, scR);
+  H.handPos = hands.map(h => handTo3D(h.c, h.sc / H.calib.scale0));
+  H.handCurl = hands.map(h => fingerCurls(h.pts));
+  H.shootHand = shoot;
+  H.raised = center ? center.y < H.calib.baseY - SET_LINE * H.calib.scale0 : H.raised;
+  const TH = SHOT_TH[shotSens];
+
+  // 팔로스루 추적
+  if (H.follow && t < H.follow.until) {
+    if (shoot && shoot.pts[8].y > shoot.pts[5].y + 0.2 * H.calib.scale0) H.follow.goose = true;
+    if (shoot && shoot.c.y < H.calib.baseY - 3 * H.calib.scale0) H.follow.high = true;
+    const ps = poseSnapshot(); if (ps) { H.follow.maxExt = Math.max(H.follow.maxExt, ps.elbowAngle); if (ps.wristHigh) H.follow.high = true; }
+  } else if (H.follow && !H.follow.reported) { H.follow.reported = true; if (ball.info) updateAnalysis(); }
+
+  const ballAvail = ball.state === 'ready' || ball.state === 'held';
+  switch (H.state) {
+    case 'idle':
+      if (ballAvail && H.holding) { H.state = 'hold'; ball.state = 'held'; H.notHoldT = 0; }
+      break;
+    case 'hold':
+      // 슛 도중엔 손이 흐려져 잠깐 놓칠 수 있으므로 0.5초까지는 잡은 상태 유지
+      if (!H.holding) { H.notHoldT += dt; if (H.notHoldT > 0.5) { H.state = 'idle'; ball.state = 'ready'; } } else H.notHoldT = 0;
+      if (center && v.vy > TH.start) { H.state = 'shoot'; H.shotStart = t; H.samples = []; H.peak = 0; H.setPose = poseSnapshot(); }
+      break;
+    case 'shoot': {
+      if (center) { H.samples.push({ ...v }); H.peak = Math.max(H.peak, v.vy); }
+      const el = t - H.shotStart, ready = H.peak >= TH.peak;
+      const lost = !center || hands.length < 2;           // 빠른 동작으로 손을 놓치거나 화면 위로 나감 = 릴리스로 간주
+      const release = (ready && ((relDist > 1.5 && relDist < 90) || v.vy < H.peak * 0.5 || lost || el > 0.9))
+        || (!ready && H.peak >= TH.start && H.lostT > 0.12);
+      if (release && H.samples.length) {
+        H.relPose = poseSnapshot();
+        const win = H.samples.filter(s => s.vy >= H.peak * 0.5);
+        const av = ['vy', 'vx', 'vz', 'vs', 'vg'].reduce((o, k) => (o[k] = win.reduce((s, x) => s + x[k], 0) / win.length, o), {});
+        H.follow = { until: t + 0.8, goose: false, high: false, maxExt: H.relPose ? H.relPose.elbowAngle : 0, reported: false, t0: t };
+        H.lastPeak = H.peak;
+        fireFromHands(av); H.state = 'idle';
+      } else if ((!ready && center && v.vy < TH.start * 0.5) || el > 1.3) {
+        H.lastPeak = H.peak;
+        H.state = H.holding ? 'hold' : 'idle'; if (H.state === 'idle') ball.state = 'ready';
+      }
+      break;
+    }
+  }
+}
+
+// 손가락 굽힘 정도 (0=쭉 폄, 1=완전히 굽힘): [엄지, 검지, 중지, 약지, 소지]
+function fingerCurls(p) {
+  const d = (a, b) => Math.hypot(p[a].x - p[b].x, p[a].y - p[b].y);
+  const palm = d(0, 9) || 1e-6;
+  const f = [[8, 5], [12, 9], [16, 13], [20, 17]].map(([tip, mcp]) => clamp((1.85 - d(0, tip) / (d(0, mcp) || 1e-6)) / 0.85, 0, 1));
+  const th = clamp((1.25 - d(4, 17) / palm) / 0.6, 0, 1);
+  return [th, ...f];
+}
+
+// 몸 위치 안내 (포즈 인식 결과 이용)
+function poseHint() {
+  if (!poseRes || !poseRes.landmarks || !poseRes.landmarks[0]) return '상체가 보이게 서 주세요';
+  const lm = poseRes.landmarks[0];
+  const u = i => 1 - lm[i].x, w = Math.abs(u(11) - u(12));
+  if (w > GUIDE.shHalf * 2 * 1.3) return '카메라에서 한 걸음 뒤로';
+  if (w < GUIDE.shHalf * 2 * 0.65) return '카메라 쪽으로 조금 가까이';
+  const mid = (u(11) + u(12)) / 2;
+  if (mid < GUIDE.head.u - 0.08) return '오른쪽으로 조금 이동';
+  if (mid > GUIDE.head.u + 0.08) return '왼쪽으로 조금 이동';
+  return null;
+}
+
+function fireFromHands(av) {
+  const warm = H.powers.length < 2;
+  const ref = warm ? av.vy : median(H.powers.slice(-7));
+  const ratio = av.vy / ref;
+  const measAng = Math.atan2(av.vy, Math.max(av.vz, 0.3)) / DEG;
+  const refAng = warm ? measAng : median(H.angles.slice(-7));
+  H.powers.push(av.vy); H.angles.push(measAng);
+  const S = SENS[difficulty];
+  const pf = clamp(1 + (ratio - 1) * S.p, 0.72, 1.3);
+  const ang = clamp(IDEAL_ANG + (measAng - refAng) * S.a, 35, 72);
+  const push = av.vg - av.vs;                                          // 보조 손이 슛 손과 다르게 옆으로 움직인 정도
+  const yawRaw = Math.atan2(av.vx, Math.max(av.vy, 1)) / DEG * 0.8 + push * 0.6;
+  const yaw = clamp(yawRaw * S.y, -10, 10);
+  if (H.target) ball.p.copy(H.target);
+  ball.p.y = Math.max(ball.p.y, 1.9);   // 릴리스 높이는 최소 이마 높이로 간주
+  fire(pf, ang, yaw, { ratio, warm, push, measAng, peak: H.peak });
+}
+
+// 포즈 스냅샷: 슛 팔의 팔꿈치 각도(3D), 팔꿈치 벌어짐(화면상), 손목 높이
+function angle3(a, b, c) {
+  const u = { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }, w = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z };
+  const d = (u.x * w.x + u.y * w.y + u.z * w.z) / (Math.hypot(u.x, u.y, u.z) * Math.hypot(w.x, w.y, w.z) || 1);
+  return Math.acos(clamp(d, -1, 1)) / DEG;
+}
+function poseSnapshot() {
+  if (!poseRes || !poseRes.landmarks || !poseRes.landmarks[0]) return null;
+  const lm = poseRes.landmarks[0], wl = poseRes.worldLandmarks[0];
+  const S = rightHanded ? { s: 12, e: 14, w: 16 } : { s: 11, e: 13, w: 15 };
+  if ([S.s, S.e, S.w].some(i => (lm[i].visibility ?? 1) < 0.4)) return null;
+  const ar = (video.videoWidth || 4) / (video.videoHeight || 3);
+  const P = i => ({ x: (1 - lm[i].x) * ar, y: lm[i].y });
+  const e = P(S.e), w = P(S.w), sgn = rightHanded ? 1 : -1;
+  return {
+    elbowAngle: angle3(wl[S.s], wl[S.e], wl[S.w]),
+    flare: Math.atan2((e.x - w.x) * sgn, Math.max(e.y - w.y, 1e-3)) / DEG,
+    wristHigh: P(S.w).y < Math.min(P(2).y, P(5).y),
+  };
+}
+
+function renderPoseChecks() {
+  const el = $('anaPose');
+  if (!camOn) { el.innerHTML = '<span class="muted">웹캠 모드에서 자세를 분석해요.</span>'; return null; }
+  const sp = H.setPose, rp = H.relPose, f = H.follow, i = ball.info || {};
+  if (!sp && !rp) { el.innerHTML = '<span class="mid">상체(어깨·팔꿈치·손목)가 화면에 보이지 않아요. 카메라에서 조금 더 떨어져 주세요.</span>'; }
+  const items = [];
+  const add = (ok, name, val, tip) => items.push({ ok, name, val, tip });
+  if (sp) add(sp.elbowAngle >= 60 && sp.elbowAngle <= 115, '세트 팔꿈치 각도', `${sp.elbowAngle.toFixed(0)}° (70~110°)`, '세트 자세에서 팔꿈치를 약 90°로 접어 공 아래에 두세요.');
+  const fl = [sp, rp].filter(Boolean).map(p => p.flare);
+  if (fl.length) { const worst = fl.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a); add(Math.abs(worst) <= 15, '팔꿈치 정렬', `${Math.abs(worst).toFixed(0)}° ${worst > 15 ? '바깥으로 벌어짐' : worst < -15 ? '안쪽으로 모임' : '일직선'}`, '팔꿈치가 옆으로 벌어졌어요(치킨윙). 팔꿈치-손목-림이 일직선이 되게 하세요.'); }
+  if (f && (rp || f.maxExt)) add(f.maxExt >= 155, '릴리스 팔 펴짐', `${f.maxExt.toFixed(0)}° (155° 이상)`, '공을 놓을 때 팔을 끝까지 쭉 펴 주세요.');
+  if (f) add(f.high || (rp && rp.wristHigh), '릴리스 높이', f.high || (rp && rp.wristHigh) ? '이마 위 ✓' : '낮음', '공을 이마보다 높은 곳에서 놓아야 막히지 않고 아치가 좋아져요.');
+  if (f) add(f.goose, '팔로스루(손목 스냅)', f.goose ? '구스넥 ✓' : '확인 안 됨', '던진 뒤 손목을 꺾어 손가락이 바닥을 향하게 1초 유지하세요(쿠키 항아리에 손 넣듯).');
+  if (i.push !== undefined) add(Math.abs(i.push) < 2.5, '보조 손', Math.abs(i.push) < 2.5 ? '개입 없음' : '공을 옆으로 밂', '보조 손은 공을 받치기만 하고, 릴리스 때 밀지 마세요.');
+  if (items.length) el.innerHTML = items.map(x => `<div class="row"><span>${x.ok ? '<span class="ok">✔</span>' : '<span class="bad">✘</span>'} ${x.name}</span><span class="muted">${x.val}</span></div>`).join('');
+  const bad = items.find(x => !x.ok);
+  return bad ? bad.tip : null;
+}
+
+// 웹캠 미리보기: 손 관절 + 상체 골격
+const HAND_LINKS = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+function drawPreview() {
+  const W = 320, Hh = 240;
+  cctx.save(); cctx.translate(W, 0); cctx.scale(-1, 1); cctx.drawImage(video, 0, 0, W, Hh); cctx.restore();
+  cctx.fillStyle = 'rgba(0,0,0,.3)'; cctx.fillRect(0, 0, W, Hh);
+  const P = p => [(1 - p.x) * W, p.y * Hh];
+  if (poseRes && poseRes.landmarks && poseRes.landmarks[0]) {
+    const lm = poseRes.landmarks[0];
+    const shootArm = rightHanded ? [[12, 14], [14, 16]] : [[11, 13], [13, 15]];
+    const other = rightHanded ? [[11, 13], [13, 15]] : [[12, 14], [14, 16]];
+    const seg = (pairs, col, w) => { cctx.strokeStyle = col; cctx.lineWidth = w; for (const [a, b] of pairs) { const [x1, y1] = P(lm[a]), [x2, y2] = P(lm[b]); cctx.beginPath(); cctx.moveTo(x1, y1); cctx.lineTo(x2, y2); cctx.stroke(); } };
+    seg([[11, 12], [11, 23], [12, 24], [23, 24]], 'rgba(147,197,253,.6)', 2); seg(other, 'rgba(147,197,253,.7)', 3); seg(shootArm, '#ff8a3d', 4);
+    for (const i of [11, 12, 13, 14, 15, 16]) { const [x, y] = P(lm[i]); cctx.fillStyle = '#fff'; cctx.beginPath(); cctx.arc(x, y, 3, 0, 7); cctx.fill(); }
+  }
+  const lms = handRes ? handRes.landmarks : [];
+  for (const lm of lms) {
+    cctx.strokeStyle = H.state === 'shoot' ? '#f87171' : H.holding ? '#34d399' : '#fbbf24'; cctx.lineWidth = 2;
+    for (const [a, b] of HAND_LINKS) { const [x1, y1] = P(lm[a]), [x2, y2] = P(lm[b]); cctx.beginPath(); cctx.moveTo(x1, y1); cctx.lineTo(x2, y2); cctx.stroke(); }
+  }
+  if (H.calib && !H.calibrating) {   // 기준선(가슴) + 세트 라인(이 위로 올리면 세트 자세)
+    const ar = (video.videoWidth || 4) / (video.videoHeight || 3);
+    const hline = (y, col, label) => { cctx.strokeStyle = col; cctx.setLineDash([5, 5]); cctx.lineWidth = 1.5; cctx.beginPath(); cctx.moveTo(0, y); cctx.lineTo(W, y); cctx.stroke(); cctx.setLineDash([]); cctx.fillStyle = col; cctx.font = '11px sans-serif'; cctx.fillText(label, 4, y - 3); };
+    hline(H.calib.baseY * Hh, 'rgba(255,255,255,.45)', '잡기 높이');
+    hline((H.calib.baseY - SET_LINE * H.calib.scale0) * Hh, H.raised ? '#34d399' : 'rgba(255,138,61,.8)', '세트 라인 ↑ 여기 위로 올렸다가 던지기');
+    if (lms.length >= 2 && H.holding) { const c = H.hist[H.hist.length - 1]; if (c) { cctx.strokeStyle = '#ff8a3d'; cctx.lineWidth = 3; cctx.beginPath(); cctx.arc(c.cx / ar * W, c.cy * Hh, H.calib.scale0 * Hh * 1.3, 0, 7); cctx.stroke(); } }
+  }
+  if (H.calibrating) drawCalib();
+}
+
+// ───────── 보정: 몸에 맞춘 목표 자세(어깨 기준) + 손 위치·팔 각도 체크 ─────────
+// 좌표는 손 관절과 같은 공간: x = 거울 화면 가로(0~종횡비), y = 세로(0~1)
+const vidAR = () => (video.videoWidth || 4) / (video.videoHeight || 3);
+const CT = { sh: null, noPoseT: 0 };
+function poseP(i) { const lm = poseRes.landmarks[0][i]; return { x: (1 - lm.x) * vidAR(), y: lm.y, vis: lm.visibility ?? 1 }; }
+function ang2(a, b, c) {
+  const u = { x: a.x - b.x, y: a.y - b.y }, w = { x: c.x - b.x, y: c.y - b.y };
+  return Math.acos(clamp((u.x * w.x + u.y * w.y) / (Math.hypot(u.x, u.y) * Math.hypot(w.x, w.y) || 1), -1, 1)) / DEG;
+}
+function calibTargets() {
+  const ar = vidAR();
+  let SL = null, SR = null;
+  if (poseRes && poseRes.landmarks && poseRes.landmarks[0]) { const a = poseP(11), b = poseP(12); if (a.vis > .5 && b.vis > .5) { SL = a; SR = b; } }
+  if (SL) {   // 어깨 위치를 부드럽게 따라감 (떨림 방지)
+    if (!CT.sh) CT.sh = { L: { ...SL }, R: { ...SR } };
+    else for (const [k, p] of [['L', SL], ['R', SR]]) { CT.sh[k].x += (p.x - CT.sh[k].x) * .3; CT.sh[k].y += (p.y - CT.sh[k].y) * .3; }
+  }
+  const ideal = { L: { x: ar * (0.5 - GUIDE.shHalf), y: GUIDE.shY }, R: { x: ar * (0.5 + GUIDE.shHalf), y: GUIDE.shY } };
+  const S = SL ? CT.sh : ideal;
+  const d = Math.hypot(S.R.x - S.L.x, S.R.y - S.L.y), mid = { x: (S.L.x + S.R.x) / 2, y: (S.L.y + S.R.y) / 2 };
+  const ball = { x: mid.x, y: mid.y + 0.62 * d, r: 0.3 * d };                       // 공 = 가슴 앞
+  const hands = [{ x: mid.x - 0.42 * d, y: ball.y + 0.03 * d }, { x: mid.x + 0.42 * d, y: ball.y + 0.03 * d }];
+  const elbows = [{ x: S.L.x - 0.03 * d, y: S.L.y + 0.92 * d }, { x: S.R.x + 0.03 * d, y: S.R.y + 0.92 * d }]; // 팔꿈치 = 어깨 바로 아래
+  const shoulders = [S.L, S.R];
+  return { ar, sh: !!SL, ideal, d, mid, ball, hands, elbows, shoulders };
+}
+// 팔꿈치 각도는 정면 카메라 2D로 보면 아래팔이 카메라 쪽을 향할 때 크게 왜곡되므로 3D 좌표(worldLandmarks)로 계산
+const ELBOW_RANGE = [55, 105], ELBOW_IDEAL = 80;
+
+function calibrateStep(hands, dt) {
+  const T = H.calT = calibTargets();
+  const ck = { body: null, hands: [false, false], elbows: [null, null], angles: [null, null], still: false };
+  const msgs = [];
+  // ① 몸 위치/거리
+  if (poseLM) {
+    if (!T.sh) { ck.body = false; CT.noPoseT += dt; msgs.push('어깨까지 보이게 카메라에서 한두 걸음 물러나 주세요'); }
+    else { CT.noPoseT = 0; const hint = poseHint(); ck.body = !hint; if (hint) msgs.push(hint); }
+  }
+  const usePose = !!poseLM && CT.noPoseT < 6;   // 6초 넘게 상체가 안 보이면 손 위치만으로 보정
+  // ② 손 위치
+  let c = null, sc = 0, rel = 99;
+  H.calHands = hands.map(h => h.c);
+  const tol = Math.max(0.28 * T.d, 0.05);
+  if (hands.length >= 2) {
+    const L = hands[0], R = hands[hands.length - 1]; sc = (L.sc + R.sc) / 2;
+    c = { x: (L.c.x + R.c.x) / 2, y: (L.c.y + R.c.y) / 2 }; rel = dist(L.c, R.c) / sc;
+    ck.hands = [L, R].map((h, i) => dist(h.c, T.hands[i]) < tol);
+    H.calHands = [L.c, R.c];
+    if (!ck.hands[0] || !ck.hands[1]) {
+      const dx = c.x - T.ball.x, dy = c.y - T.ball.y;
+      if (Math.hypot(dx, dy) < tol) msgs.push('두 손 간격을 공 크기(점선 손 위치)에 맞춰 주세요');
+      else msgs.push(Math.abs(dy) > Math.abs(dx) ? (dy > 0 ? '공(두 손)을 가슴 높이까지 올려 주세요' : '공(두 손)을 가슴 높이로 내려 주세요') : (dx > 0 ? '두 손을 왼쪽으로 옮겨 주세요' : '두 손을 오른쪽으로 옮겨 주세요'));
+    }
+  } else msgs.push('두 손을 모두 화면에 보여 주세요');
+  // ③ 팔 각도 (팔꿈치 위치 + 어깨-팔꿈치-손목 각도)
+  H.calArms = [null, null];
+  if (usePose && T.sh) for (const i of [0, 1]) {
+    const S = T.shoulders[i], E = poseP(i ? 14 : 13), W = poseP(i ? 16 : 15);
+    if (E.vis < .5 || W.vis < .5) { ck.elbows[i] = false; continue; }
+    const wl = poseRes.worldLandmarks && poseRes.worldLandmarks[0];
+    const a = wl ? angle3(wl[i ? 12 : 11], wl[i ? 14 : 13], wl[i ? 16 : 15]) : ang2(S, E, W);
+    const okA = a >= ELBOW_RANGE[0] && a <= ELBOW_RANGE[1];
+    const low = E.y > S.y + 0.45 * T.d, out = (i ? E.x - S.x : S.x - E.x) > 0.3 * T.d, inward = (i ? S.x - E.x : E.x - S.x) > 0.35 * T.d;
+    const okP = low && !out && !inward;
+    ck.angles[i] = a; ck.elbows[i] = okA && okP; H.calArms[i] = { S, E, W, okA, okP };
+    if (!ck.elbows[i]) {
+      const side = i ? '오른' : '왼';
+      msgs.push(!low ? `${side}쪽 팔꿈치를 아래로 내리세요` : out ? `${side}쪽 팔꿈치가 벌어졌어요 — 몸 쪽으로 모으세요` : inward ? `${side}쪽 팔꿈치를 조금 바깥으로` :
+        a > ELBOW_RANGE[1] ? `${side}팔을 더 굽혀 공을 가슴 앞으로 당기세요` : `${side}팔을 조금 펴서 공을 앞으로 내미세요`);
+    }
+  }
+  const bodyOk = !usePose || ck.body, armsOk = !usePose || (ck.elbows[0] && ck.elbows[1]);
+  const handsOk = ck.hands[0] && ck.hands[1] && rel < 6;
+  // ④ 정지 유지
+  if (handsOk && armsOk && bodyOk) {
+    const a = H.calibAcc, still = a && dist(a.c, c) < sc * 0.35;
+    if (!a || !still) H.calibAcc = { c, sc, rel };
+    else { a.c = { x: a.c.x * .9 + c.x * .1, y: a.c.y * .9 + c.y * .1 }; a.sc = a.sc * .9 + sc * .1; a.rel = a.rel * .9 + rel * .1; }
+    ck.still = !!still;
+  } else H.calibAcc = null;
+  const ok = handsOk && armsOk && bodyOk && ck.still;
+  H.calibP = ok ? H.calibP + dt / 2 : Math.max(0, H.calibP - dt * 0.7);
+  H.calCk = ck; H.calUsePose = usePose;
+  $('calRing').style.setProperty('--p', Math.round(H.calibP * 100)); $('calTxt').textContent = Math.round(H.calibP * 100) + '%';
+  $('calMsg').textContent = ok ? '좋아요! 그대로 유지하세요…' : handsOk && armsOk && bodyOk ? '그대로 가만히 유지하세요' : msgs[0] || '';
+  const mk = (st, name, val = '') => `<div class="ck"><span>${st === null ? '<span class="muted">–</span>' : st ? '<span class="ok">✔</span>' : '<span class="bad">✘</span>'} ${name}</span><span class="muted">${val}</span></div>`;
+  const angTxt = i => ck.angles[i] == null ? '' : `${ck.angles[i].toFixed(0)}° / 목표 ${ELBOW_RANGE[0]}~${ELBOW_RANGE[1]}°`;
+  $('calChecks').innerHTML = [
+    mk(usePose ? ck.body : null, '몸 위치·거리'),
+    mk(ck.hands[0], '왼손 위치'), mk(ck.hands[1], '오른손 위치'),
+    mk(usePose ? ck.elbows[0] : null, '왼팔 각도', usePose ? angTxt(0) : '상체 미인식'),
+    mk(usePose ? ck.elbows[1] : null, '오른팔 각도', usePose ? angTxt(1) : ''),
+    mk(ck.still, '2초간 정지'),
+  ].join('');
+  if (H.calibP >= 1) finishCalibration();
+}
+
+function finishCalibration() {
+  const a = H.calibAcc;
+  H.calib = { cx0: a.c.x, baseY: a.c.y, scale0: a.sc, rel0: a.rel };
+  H.calibrating = false; H.hist = []; H.state = 'idle'; H.powers = []; H.angles = [];
+  flyToPreview();
+  bigText('보정 완료!', '이제 공을 잡고 던져 보세요', 'ok'); sfx.release();
+}
+// 보정 화면의 큰 웹캠이 왼쪽 아래 미리보기 자리로 날아가 작아지는 연출
+function flyToPreview() {
+  const src = $('calCanvas'), r1 = src.getBoundingClientRect(), r2 = $('camCanvas').getBoundingClientRect();
+  const fly = document.createElement('canvas'); fly.width = src.width; fly.height = src.height;
+  fly.getContext('2d').drawImage(src, 0, 0); fly.className = 'flyCam';
+  Object.assign(fly.style, { left: r1.left + 'px', top: r1.top + 'px', width: r1.width + 'px', height: r1.height + 'px' });
+  document.body.appendChild(fly);
+  $('calib').classList.add('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => Object.assign(fly.style, { left: r2.left + 'px', top: r2.top + 'px', width: r2.width + 'px', height: r2.height + 'px', opacity: .35 })));
+  setTimeout(() => { fly.remove(); $('camBox').classList.add('glow'); setTimeout(() => $('camBox').classList.remove('glow'), 900); }, 880);
+}
+
+// 보정 화면 그리기: 목표 자세(점선) vs 현재 자세(실선) + 이동 화살표 + 팔 각도
+const calCtx = $('calCanvas').getContext('2d');
+function drawCalib() {
+  const g = calCtx, W = 960, Hh = 720, T = H.calT; if (!T) return;
+  const X = p => p.x / T.ar * W, Y = p => p.y * Hh, K = Hh;   // K: 길이 → 픽셀
+  const ck = H.calCk || { hands: [], elbows: [] };
+  const OK = '#34d399', GUIDE_C = 'rgba(255,255,255,.9)', WARN = '#ff8a3d';
+  g.save(); g.translate(W, 0); g.scale(-1, 1); g.drawImage(video, 0, 0, W, Hh); g.restore();
+  g.fillStyle = 'rgba(0,0,0,.38)'; g.fillRect(0, 0, W, Hh);
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const label = (txt, x, y, col = '#fff', size = 20) => { g.font = `800 ${size}px "Malgun Gothic",sans-serif`; g.textAlign = 'center'; g.lineWidth = 5; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(txt, x, y); g.fillStyle = col; g.fillText(txt, x, y); };
+  const arrow = (a, b, col) => {
+    const x1 = X(a), y1 = Y(a), x2 = X(b), y2 = Y(b), L = Math.hypot(x2 - x1, y2 - y1); if (L < 18) return;
+    const ux = (x2 - x1) / L, uy = (y2 - y1) / L, ex = x2 - ux * 14, ey = y2 - uy * 14;
+    g.strokeStyle = col; g.lineWidth = 6; g.setLineDash([]); g.beginPath(); g.moveTo(x1, y1); g.lineTo(ex, ey); g.stroke();
+    g.fillStyle = col; g.beginPath(); g.moveTo(x2, y2); g.lineTo(ex - uy * 12, ey + ux * 12); g.lineTo(ex + uy * 12, ey - ux * 12); g.closePath(); g.fill();
+  };
+  // ① 이상적인 몸 위치 (머리 + 어깨 윤곽)
+  const id = T.ideal, iMid = { x: (id.L.x + id.R.x) / 2, y: id.L.y };
+  g.strokeStyle = ck.body ? OK : 'rgba(255,255,255,.55)'; g.lineWidth = 3; g.setLineDash([12, 9]);
+  const hx = X(iMid), hy = Y({ y: GUIDE.head.v }), hr = GUIDE.head.r * Hh * 1.3;
+  g.beginPath(); g.ellipse(hx, hy, hr * .8, hr, 0, 0, 7); g.stroke();
+  const sl = X(id.L), sr = X(id.R), sy = Y(id.L);
+  g.beginPath(); g.moveTo(hx - hr * .35, hy + hr); g.lineTo(hx - hr * .35, sy - 30); g.quadraticCurveTo(sl + 14, sy - 26, sl, sy + 12); g.lineTo(sl - 8, Hh);
+  g.moveTo(hx + hr * .35, hy + hr); g.lineTo(hx + hr * .35, sy - 30); g.quadraticCurveTo(sr - 14, sy - 26, sr, sy + 12); g.lineTo(sr + 8, Hh); g.stroke();
+  // ② 목표 팔 (어깨 → 팔꿈치 → 손) : 굵은 반투명 점선 + 목표 각도
+  for (const i of [0, 1]) {
+    const S = T.shoulders[i], E = T.elbows[i], Hd = T.hands[i], good = ck.elbows[i];
+    g.strokeStyle = good ? 'rgba(52,211,153,.55)' : 'rgba(96,165,250,.55)'; g.lineWidth = 0.075 * T.d * K; g.setLineDash([]);
+    g.beginPath(); g.moveTo(X(S), Y(S)); g.lineTo(X(E), Y(E)); g.lineTo(X(Hd), Y(Hd)); g.stroke();
+    g.strokeStyle = good ? OK : '#93c5fd'; g.lineWidth = 3; g.setLineDash([10, 8]);
+    g.beginPath(); g.arc(X(E), Y(E), 0.13 * T.d * K, 0, 7); g.stroke();
+    // 목표 각도 호
+    const a1 = Math.atan2(Y(S) - Y(E), X(S) - X(E)), a2 = Math.atan2(Y(Hd) - Y(E), X(Hd) - X(E));
+    g.setLineDash([]); g.lineWidth = 4; g.beginPath(); g.arc(X(E), Y(E), 0.2 * T.d * K, Math.min(a1, a2), Math.max(a1, a2)); g.stroke();
+    label(`목표 약 ${ELBOW_IDEAL}°`, X(E) + (i ? 1 : -1) * 0.45 * T.d * K, Y(E) + 0.3 * T.d * K, good ? OK : '#93c5fd', 18);
+  }
+  // ③ 공 + 손 목표 위치
+  const handsOk = ck.hands[0] && ck.hands[1];
+  g.setLineDash([12, 9]); g.lineWidth = 4; g.strokeStyle = handsOk ? OK : WARN; g.fillStyle = handsOk ? 'rgba(52,211,153,.16)' : 'rgba(255,138,61,.14)';
+  g.beginPath(); g.arc(X(T.ball), Y(T.ball), T.ball.r * K, 0, 7); g.fill(); g.stroke();
+  label('🏀 공', X(T.ball), Y(T.ball) + 7, '#fff', 22);
+  T.hands.forEach((h, i) => {
+    const x = X(h), y = Y(h), s = T.d * K, good = ck.hands[i];
+    g.strokeStyle = good ? OK : GUIDE_C; g.setLineDash([9, 7]); g.lineWidth = 3.5;
+    g.beginPath(); g.ellipse(x, y + s * .03, s * .1, s * .13, 0, 0, 7); g.stroke();
+    for (let k = 0; k < 4; k++) { const fx = x - s * .065 + k * s * .043; g.beginPath(); g.moveTo(fx, y - s * .09); g.lineTo(fx, y - s * (.2 - Math.abs(k - 1.5) * .025)); g.stroke(); }
+    g.beginPath(); g.moveTo(x + (i ? -1 : 1) * s * .09, y + s * .02); g.lineTo(x + (i ? -1 : 1) * s * .16, y - s * .06); g.stroke();
+    label(i ? '오른손' : '왼손', x, y + s * .25, good ? OK : '#fff', 18);
+  });
+  // ④ 현재 팔 (실선) + 현재 각도 + 팔꿈치 이동 화살표
+  g.setLineDash([]);
+  (H.calArms || []).forEach((a, i) => {
+    if (!a) return; const good = ck.elbows[i], col = good ? OK : '#f87171';
+    g.strokeStyle = col; g.lineWidth = 6; g.beginPath(); g.moveTo(X(a.S), Y(a.S)); g.lineTo(X(a.E), Y(a.E)); g.lineTo(X(a.W), Y(a.W)); g.stroke();
+    for (const p of [a.S, a.E, a.W]) { g.fillStyle = '#fff'; g.beginPath(); g.arc(X(p), Y(p), 7, 0, 7); g.fill(); }
+    label(`현재 ${ck.angles[i].toFixed(0)}°`, X(a.E) + (i ? 1 : -1) * 0.42 * T.d * K, Y(a.E) - 0.06 * T.d * K, col, 20);
+    if (!a.okP) arrow(a.E, T.elbows[i], WARN);
+  });
+  // ⑤ 손 이동 화살표 + 실제 손 관절
+  (H.calHands || []).forEach((c, i) => { if (H.calHands.length >= 2 && !ck.hands[i]) arrow(c, T.hands[i], WARN); });
+  const P = p => [(1 - p.x) * W, p.y * Hh];
+  for (const lm of (handRes ? handRes.landmarks : [])) {
+    g.strokeStyle = '#fbbf24'; g.lineWidth = 3;
+    for (const [a, b] of HAND_LINKS) { const [x1, y1] = P(lm[a]), [x2, y2] = P(lm[b]); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+  }
+  g.textAlign = 'start';
+}
+
+function processVision() {
+  if (!camOn || !handLM) return;
+  if (video.readyState < 2 || video.currentTime === lastVT) return;
+  lastVT = video.currentTime; vFrame++;
+  const ts = performance.now();
+  handRes = handLM.detectForVideo(video, ts);
+  if (poseLM && vFrame % 2 === 0) poseRes = poseLM.detectForVideo(video, ts);
+  const t = ts / 1000, dt = lastDetT ? Math.min(0.1, t - lastDetT) : 0.033; lastDetT = t;
+  onVision(t, dt);
+  drawPreview();
+}
+
+// ───────── 키보드 모드 ─────────
+const KB = { charging: false, t0: 0, aim: 0, ang: IDEAL_ANG, gauge: 1 };
+addEventListener('keydown', e => {
+  if (e.repeat && e.code === 'Space') { e.preventDefault(); return; }
+  if (e.code === 'Space') { e.preventDefault(); if ((ball.state === 'ready' || ball.state === 'held') && !H.calibrating) { KB.charging = true; KB.t0 = performance.now(); } }
+  if (e.code === 'ArrowLeft') KB.aim = clamp(KB.aim - 0.5, -6, 6);
+  if (e.code === 'ArrowRight') KB.aim = clamp(KB.aim + 0.5, -6, 6);
+  if (e.code === 'ArrowUp') KB.ang = clamp(KB.ang + 1, 38, 68);
+  if (e.code === 'ArrowDown') KB.ang = clamp(KB.ang - 1, 38, 68);
+  if (e.code === 'KeyV') startReplay();
+  if (e.code === 'KeyK') startCalibration();
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space' && KB.charging) {
+    KB.charging = false; ball.state = 'ready'; H.state = 'idle'; ball.p.set(0.12, 2.1, 3.9);
+    fire(KB.gauge, KB.ang, KB.aim, { kb: true }); KB.followT = performance.now() / 1000;
+  }
+});
+
+// ───────── 다시보기 (슬로모션, 측면 시점) ─────────
+const replay = { on: false, i: 0, frames: [] };
+const sideCam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
+function startReplay() {
+  if (!ball.frames || ball.frames.length < 5 || ball.state === 'flight') return;
+  replay.on = true; replay.i = 0; replay.frames = ball.frames.slice(); bigText('🎬 다시보기', '슬로모션 0.35배', 'mid');
+}
+
+// ───────── 메인 루프 ─────────
+let last = performance.now(), running = false, netWiggle = 0;
+const tmpV = new THREE.Vector3();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.033, (now - last) / 1000); last = now;
+  if (running) processVision();
+  if (running && !replay.on) physics(dt);
+
+  // 공 위치
+  if (replay.on) {
+    replay.i += dt * 60 * 0.35;
+    const f = replay.frames[Math.min(replay.frames.length - 1, Math.floor(replay.i))];
+    ballMesh.position.copy(f); ballMesh.rotation.x += 14 * dt * 0.35;
+    if (replay.i >= replay.frames.length - 1) replay.on = false;
+  } else {
+    if (ball.state === 'held' && H.target) ball.p.lerp(H.target, Math.min(1, dt * 18));
+    else if (ball.state === 'ready') ball.p.lerp(camOn ? HOLD_POS : KEY_POS, Math.min(1, dt * 6));
+    ballMesh.position.copy(ball.p);
+    if (ball.state === 'flight') ballMesh.rotation.x += ball.spin * dt;
+  }
+  try { updateHands3D(dt); } catch (e) { console.warn('hands3D', e); }   // 손 표시 오류가 화면 렌더링을 멈추지 않도록
+  // 그물 흔들림
+  if (netWiggle > 0) { netWiggle = Math.max(0, netWiggle - dt * 1.8); const s = Math.sin(netWiggle * Math.PI * 3) * netWiggle; net.scale.set(1 - 0.12 * s, 1 + 0.35 * netWiggle, 1 - 0.12 * s); } else net.scale.set(1, 1, 1);
+
+  // 카메라
+  let cam = camera;
+  if (replay.on) { sideCam.aspect = innerWidth / innerHeight; sideCam.updateProjectionMatrix(); sideCam.position.set(5.2, 2.6, 2.2); sideCam.lookAt(0, 2.6, 2.0); cam = sideCam; }
+
+  // 키보드 게이지
+  if (KB.charging) KB.gauge = 1 - 0.22 * Math.cos((now - KB.t0) / 1000 * 3.2);
+  if (running) updatePrompt();
+  renderer.render(scene, cam);
+}
+
+// 손 자세: 공 잡기(grip) / 던진 뒤 팔로스루(follow) / 웹캠 손 그대로(free) / 내려놓기(rest)
+// [엄지, 검지, 중지, 약지, 소지, 벌림] — 슛 손은 손가락을 넓게 펴서 공 곡면을 따라 살짝 감쌈
+const GRIP = [0.22, 0.12, 0.12, 0.13, 0.15, 1], GUIDE_GRIP = [0.18, 0.1, 0.1, 0.12, 0.14, 0.7], OPEN = [0.1, 0.03, 0.03, 0.05, 0.07, 0.5];
+function updateHands3D(dt) {
+  if (!arms) return;
+  const sS = rightHanded ? 1 : -1, nowS = performance.now() / 1000, k = Math.min(1, dt * 16);
+  const S = arms.shoot, Gd = arms.guide;
+  const show = !replay.on && running && (!camOn || (H.calib && !H.calibrating));
+  if (!show) { poseArm(S, false); poseArm(Gd, false); return; }
+  const gripAt = (bp) => {
+    // 슛 손: 공 뒤-아래를 받치고 손가락은 위로 (손바닥이 림 쪽)
+    // 손목을 뒤로 젖혀(코킹) 공이 손가락 위에 얹히도록: 손가락은 위·뒤(내 쪽)로, 손바닥은 공 아래-뒤를 받침
+    const fS = V3(-sS * 0.12, 0.74, 0.66).normalize(), nS = V3(0, 0.66, -0.74).addScaledVector(fS, -V3(0, 0.66, -0.74).dot(fS)).normalize();
+    poseArm(S, true, bp.clone().addScaledVector(nS, -(BALL_R + 0.016)).addScaledVector(fS, -0.07).add(V3(sS * 0.01, 0, 0)), fS, nS, GRIP, sS, k);
+    // 보조 손: 공 옆면
+    const nG = V3(sS, 0, 0), fG = V3(0, 0.97, -0.24).normalize();
+    poseArm(Gd, true, bp.clone().addScaledVector(nG, -(BALL_R + 0.016)).addScaledVector(fG, -0.055), fG, nG, GUIDE_GRIP, -sS, k);
+  };
+  const goose = (wrist) => poseArm(S, true, wrist, V3(0, -0.45, -0.89), V3(0, -0.89, 0.45), [0.3, 0.3, 0.32, 0.36, 0.4, 0.4], sS, Math.min(1, dt * 10));
+  if (!camOn) {
+    const follow = KB.followT && nowS - KB.followT < 1.1 && ball.state !== 'ready';
+    if (ball.state === 'ready') gripAt(ball.p);
+    else if (follow && ball.info) {
+      goose(reachTarget(sS));
+      poseArm(Gd, true, reachTarget(-sS).add(V3(-sS * 0.05, -0.12, 0.08)), V3(0, 1, -0.1), V3(sS, 0, 0), OPEN, -sS, k);
+    } else {
+      poseArm(S, true, V3(sS * 0.3, 1.05, 4.15), V3(0, 1, -0.3), V3(-sS, 0, 0), OPEN, sS, k * 0.5);
+      poseArm(Gd, true, V3(-sS * 0.3, 1.05, 4.15), V3(0, 1, -0.3), V3(sS, 0, 0), OPEN, -sS, k * 0.5);
+    }
+    return;
+  }
+  if (ball.state === 'held') { gripAt(ball.p); return; }
+  // 웹캠 손 위치 그대로 (손바닥은 서로 마주 보게, 손가락 굽힘은 실제 손에서)
+  const hs = H.hands || [], pos = H.handPos || [], curl = H.handCurl || [];
+  let si = -1, gi = -1;
+  if (hs.length >= 2) { si = rightHanded ? hs.length - 1 : 0; gi = rightHanded ? 0 : hs.length - 1; }
+  else if (hs.length === 1) { const isRightSide = hs[0].c.x > H.calib.cx0; if (isRightSide === rightHanded) si = 0; else gi = 0; }
+  const following = H.follow && nowS < H.follow.until + 0.3 && ball.state !== 'ready';
+  if (si >= 0 && !pos[si]) si = -1;          // 보정 직후 등 손 위치가 아직 계산되지 않은 프레임
+  if (gi >= 0 && !pos[gi]) gi = -1;
+  if (si >= 0) {
+    if (following && H.follow.goose) goose(pos[si]);
+    else poseArm(S, true, pos[si], V3(0, 1, -0.15), following ? V3(0, 0.1, -1) : V3(-sS, 0, 0), curl[si] || OPEN, sS, k);
+  } else poseArm(S, false);
+  if (gi >= 0) poseArm(Gd, true, pos[gi], V3(0, 1, -0.15), V3(sS, 0, 0), curl[gi] || OPEN, -sS, k);
+  else poseArm(Gd, false);
+}
+
+function updatePrompt() {
+  const p = $('prompt');
+  if (!camOn) {
+    const pct = ((KB.gauge - 0.78) / 0.44 * 100);
+    p.innerHTML = `${ball.state === 'ready' ? 'Space를 누르고 있다가 게이지가 <b>가운데(100%)</b>일 때 떼세요' : '…'}
+      <div class="muted" style="font-size:12px;font-weight:400">←→ 조준 ${fmt(KB.aim, 1)}° · ↑↓ 발사각 ${KB.ang}° · 힘 ${(KB.gauge * 100).toFixed(0)}%</div>
+      <div id="gauge"><b style="width:${clamp(pct, 0, 100)}%"></b><s></s></div>`;
+    return;
+  }
+  const st = $('camState');
+  const v = H.vel || { vy: 0 };
+  const label = { idle: '대기', hold: '🙌 공 잡음', shoot: '🚀 슛 동작 중' }[H.state];
+  const TH = SHOT_TH[shotSens];
+  st.innerHTML = `${H.hands.length}손 인식 · 상태: <b>${label}</b><br>위로 속도 ${v.vy.toFixed(1)} · 손 간격 ${H.relDist && H.relDist < 50 ? (H.relDist * 100).toFixed(0) + '%' : '-'}<br>
+    ${H.lastPeak !== undefined ? `직전 동작 최고속도 <b class="${H.lastPeak >= TH.peak ? 'ok' : 'bad'}">${H.lastPeak.toFixed(1)}</b> / 필요 ${TH.peak}<br>` : ''}
+    자세 인식: ${poseRes && poseRes.landmarks && poseRes.landmarks[0] ? '<span class="ok">상체 보임</span>' : '<span class="bad">상체 안 보임</span>'}`;
+  let msg;
+  if (H.calibrating) msg = '보정 중: 공을 잡은 자세로 가만히';
+  else if (ball.state === 'flight' || ball.state === 'done') msg = H.follow && performance.now() / 1000 < H.follow.until ? '🦢 팔로스루 유지!' : '…';
+  else if (H.hands.length < 2) msg = '두 손을 카메라에 보여 주세요';
+  else if (H.state === 'idle') msg = '🙌 두 손바닥을 공 크기만큼 벌려 공을 잡으세요';
+  else if (H.state === 'hold') msg = (H.raised ? '✅ 세트 완료! 위·앞으로 빠르게 쭉 밀어 던지세요' : '⬆️ 공을 세트 라인 위(이마)로 올리세요')
+    + (H.powers.length < 2 ? ` (워밍업 ${H.powers.length + 1}/2)` : '') + ' · Space로도 슛';
+  else msg = '🚀 슛!';
+  p.textContent = msg;
+}
+
+// ───────── 메뉴 ─────────
+function begin() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch {} }
+  rightHanded = $('optHand').value === 'R'; difficulty = $('optDiff').value; shotSens = $('optSens').value;
+  buildHands();
+  $('menu').classList.add('hidden'); running = true;
+  ball.state = 'ready'; ball.p.copy(camOn ? HOLD_POS : KEY_POS);
+  $('btnCalib').classList.toggle('hidden', !camOn);
+  if (camOn && !H.calib) startCalibration();
+  renderPoseChecks();
+}
+$('startCam').onclick = async () => {
+  $('startCam').disabled = true;
+  try { if (!camOn) await initVision(); $('loading').textContent = ''; begin(); }
+  catch (err) { console.error(err); $('loading').textContent = '웹캠/모델을 불러오지 못했어요: ' + (err.message || err) + ' → 키보드로 시작할 수 있어요.'; }
+  $('startCam').disabled = false;
+};
+$('startKey').onclick = () => begin();
+$('btnReplay').onclick = startReplay;
+$('btnCalib').onclick = startCalibration;
+$('btnMenu').onclick = () => { running = false; $('menu').classList.remove('hidden'); };
+
+updateStats();
+requestAnimationFrame(loop);
+window.__bb = { ball, stats, H, fire, camera, physics, KB, idealSpeed, begin,
+  _feed(res, t, dt, pose) { handRes = res; if (pose) poseRes = pose; onVision(t, dt); if (H.calibrating) drawCalib(); }, _setCam(v) { camOn = v; }, _fakePoseModel() { poseLM = poseLM || {}; } };
+</script>
+</body>
+</html>
